@@ -13,10 +13,27 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
-func decodeBencode(bencodedString string) (interface{}, error) {
-	if bencodedString[0] == 'i' {
+func decodeBencode(bencodedString string) (interface{}, string, error) {
+	if bencodedString[0] == 'l' {
+		var elements []interface{}
+		remaining := bencodedString[1 : len(bencodedString)-1]
+		for {
+			element, rem, err := decodeBencode(remaining)
+			if err != nil {
+				return elements, "", nil
+			}
+			remaining = rem
+			elements = append(elements, element)
+			if remaining == "" {
+				break
+			}
+		}
+		return elements, "", nil
+
+	} else if bencodedString[0] == 'i' {
 		value := ""
-		for i := 1; i < len(bencodedString); i++ {
+		var i int
+		for i = 1; i < len(bencodedString); i++ {
 			if bencodedString[i] == 'e' {
 				break
 			}
@@ -24,9 +41,9 @@ func decodeBencode(bencodedString string) (interface{}, error) {
 		}
 		number, err := strconv.Atoi(value)
 		if err != nil {
-			return "", err
+			return "", bencodedString[i+1:], err
 		}
-		return number, nil
+		return number, bencodedString[i+1:], nil
 	} else if unicode.IsDigit(rune(bencodedString[0])) {
 		var firstColonIndex int
 
@@ -41,12 +58,12 @@ func decodeBencode(bencodedString string) (interface{}, error) {
 
 		length, err := strconv.Atoi(lengthStr)
 		if err != nil {
-			return "", err
+			return "", bencodedString[firstColonIndex+1+length:], err
 		}
 
-		return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], nil
+		return bencodedString[firstColonIndex+1 : firstColonIndex+1+length], bencodedString[firstColonIndex+1+length:], nil
 	} else {
-		return "", fmt.Errorf("Only strings are supported at the moment")
+		return "", "", fmt.Errorf("Only strings are supported at the moment")
 	}
 }
 
@@ -58,7 +75,7 @@ func main() {
 
 		bencodedValue := os.Args[2]
 
-		decoded, err := decodeBencode(bencodedValue)
+		decoded, _, err := decodeBencode(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
