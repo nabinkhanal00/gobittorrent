@@ -16,7 +16,7 @@ import (
 
 func decodeBencode(bencodedString string) (interface{}, string, error) {
 	if bencodedString[0] == 'l' {
-		var elements []interface{}
+		var elements []interface{} = []interface{}{}
 		remaining := bencodedString[1 : len(bencodedString)-1]
 		if remaining == "" {
 			return elements, "", nil
