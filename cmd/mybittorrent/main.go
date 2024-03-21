@@ -13,6 +13,7 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
+
 func decodeBencode(bencodedString string) (interface{}, string, error) {
 	if bencodedString[0] == 'l' {
 		var elements []interface{}
