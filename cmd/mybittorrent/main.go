@@ -83,7 +83,7 @@ func parseList(bencodedString string) (interface{}, int, error) {
 		list = append(list, value)
 		currentIndex = index + currentIndex
 	}
-	return list, currentIndex, nil
+	return list, currentIndex + 1, nil
 }
 
 func parseDictionary(bencodedString string) (interface{}, int, error) {
