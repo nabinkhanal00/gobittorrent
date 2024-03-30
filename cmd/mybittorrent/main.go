@@ -59,50 +59,132 @@ func parseString(input string) (string, int, error) {
 	return input[firstColonIndex+1 : firstColonIndex+1+length], firstColonIndex + 1 + length, nil
 }
 
-func decodeBencode(bencodedString string) (interface{}, error) {
-
+func parseList(bencodedString string) (interface{}, int, error) {
 	currentIndex := 0
 	result := []interface{}{}
 	s := []interface{}{}
 	var oldTop *[]interface{} = nil
-	current := &result
-	s = append(s, &result)
+	var current *[]interface{} = nil
 	for currentIndex < len(bencodedString) {
 		if bencodedString[currentIndex] == 'l' {
 			newList := []interface{}{}
 			s = append(s, &newList)
-			oldTop = current
+			if current != nil {
+				oldTop = current
+			}
 			current = &newList
 			currentIndex++
 		} else if bencodedString[currentIndex] == 'e' {
-			*oldTop = append(*oldTop, *current)
-			current = oldTop
-			s = s[:len(s)-1]
-			if len(s) == 1 {
-				oldTop = nil
+			if oldTop != nil {
+				*oldTop = append(*oldTop, *current)
+				current = oldTop
+				s = s[:len(s)-1]
+				if len(s) == 1 {
+					oldTop = nil
+				} else {
+					oldTop = s[len(s)-2].(*[]interface{})
+				}
 			} else {
-				oldTop = s[len(s)-2].(*[]interface{})
+				return *current, currentIndex + 1, nil
 			}
 
 			currentIndex++
 		} else if bencodedString[currentIndex] == 'i' {
 			intValue, index, err := parseInt(bencodedString[currentIndex:])
 			if err != nil {
-				return nil, err
+				return nil, -1, err
 			}
 			currentIndex = currentIndex + index
 			*current = append(*current, intValue)
 		} else if unicode.IsDigit(rune(bencodedString[currentIndex])) {
 			strValue, index, err := parseString(bencodedString[currentIndex:])
 			if err != nil {
-				return nil, err
+				return nil, -1, err
 			}
 			currentIndex = currentIndex + index
 			*current = append(*current, strValue)
-		} else {
 		}
 	}
-	return result[0], nil
+	return result, currentIndex + 1, nil
+}
+func parseDictionary(bencodedString string) (interface{}, int, error) {
+	currentIndex := 1
+	dict := map[string]interface{}{}
+	for bencodedString[currentIndex] != 'e' {
+		key, index, err := parseOne(bencodedString[currentIndex:])
+		if err != nil {
+			return nil, -1, err
+		}
+		currentIndex = index + currentIndex
+		value, index, err := parseOne(bencodedString[currentIndex:])
+		if err != nil {
+			return nil, -1, err
+		}
+		currentIndex = index + currentIndex
+		dict[key.(string)] = value
+	}
+	return dict, currentIndex + 1, nil
+}
+func parseOne(bencodedString string) (interface{}, int, error) {
+
+	letter := bencodedString[0]
+	if letter == 'l' {
+		if result, nextPos, err := parseList(bencodedString); err != nil {
+			return nil, nextPos, err
+		} else {
+			return result, nextPos, nil
+		}
+	} else if letter == 'd' {
+		if result, nextPos, err := parseDictionary(bencodedString); err != nil {
+			return nil, nextPos, err
+		} else {
+			return result, nextPos, nil
+		}
+	} else if letter == 'i' {
+		if result, nextPos, err := parseInt(bencodedString); err != nil {
+			return nil, nextPos, err
+		} else {
+			return result, nextPos, nil
+		}
+	} else if unicode.IsDigit(rune(letter)) {
+		if result, nextPos, err := parseString(bencodedString); err != nil {
+			return nil, nextPos, err
+		} else {
+			return result, nextPos, nil
+		}
+	}
+	return nil, -1, nil
+}
+func decodeBencode(bencodedString string) (interface{}, error) {
+	letter := bencodedString[0]
+	if letter == 'l' {
+		if result, _, err := parseList(bencodedString); err != nil {
+			return nil, err
+		} else {
+			return result, nil
+		}
+	} else if letter == 'd' {
+
+		if result, _, err := parseDictionary(bencodedString); err != nil {
+			return nil, err
+		} else {
+			return result, nil
+		}
+	} else if letter == 'i' {
+		if result, _, err := parseInt(bencodedString); err != nil {
+			return nil, err
+		} else {
+			return result, nil
+		}
+	} else if unicode.IsDigit(rune(letter)) {
+
+		if result, _, err := parseString(bencodedString); err != nil {
+			return nil, err
+		} else {
+			return result, nil
+		}
+	}
+	return nil, nil
 }
 
 func main() {
