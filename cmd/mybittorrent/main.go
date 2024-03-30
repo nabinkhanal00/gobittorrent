@@ -71,24 +71,21 @@ func decodeBencode(bencodedString string) (interface{}, error) {
 		s = append(s, &result)
 		for currentIndex < len(bencodedString) {
 			if bencodedString[currentIndex] == 'l' {
-				fmt.Println("Start:", bencodedString[currentIndex:])
 				newList := []interface{}{}
 				s = append(s, &newList)
 				oldTop = current
 				current = &newList
 				currentIndex++
 			} else if bencodedString[currentIndex] == 'e' {
-				fmt.Println("End:", bencodedString[currentIndex:])
-				fmt.Println("Result", result, "OldTop", *oldTop, "current", *current)
 				*oldTop = append(*oldTop, *current)
 				current = oldTop
-				fmt.Println("Result", result, "OldTop", *oldTop, "current", *current)
 				s = s[:len(s)-1]
-				if len(s) == 0 {
+				if len(s) == 1 {
 					oldTop = nil
 				} else {
-					oldTop = s[len(s)-1].(*[]interface{})
+					oldTop = s[len(s)-2].(*[]interface{})
 				}
+
 				currentIndex++
 			} else if bencodedString[currentIndex] == 'i' {
 				intValue, index, err := parseInt(bencodedString[currentIndex:])
@@ -105,7 +102,6 @@ func decodeBencode(bencodedString string) (interface{}, error) {
 				currentIndex = currentIndex + index
 				*current = append(*current, strValue)
 			} else {
-				fmt.Println(bencodedString[currentIndex:])
 			}
 		}
 		return result, nil
