@@ -3,15 +3,12 @@ package main
 import (
 	// Uncomment this line to pass the first stage
 	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"unicode"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
@@ -19,19 +16,6 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
-
-type Torrent struct {
-	Announce  string `json:"announce"`
-	CreatedBy string `json:"created by"`
-	Info      Info   `json:"info"`
-}
-
-type Info struct {
-	Length      int    `json:"length"`
-	Name        string `json:"name"`
-	PieceLength int    `json:"piece length"`
-	Pieces      string `json:"pieces"`
-}
 
 func encodeInt(input int) (string, error) {
 	value := strconv.Itoa(input)
@@ -216,21 +200,6 @@ func decodeOne(bencodedString string) (interface{}, int, error) {
 	return nil, -1, nil
 }
 
-func decodePieceHashes(str string) []string {
-
-	hashes := make([]string, 0)
-	reader := strings.NewReader(str)
-	buff := make([]byte, 20)
-	for {
-		_, err := reader.Read(buff)
-		if err == io.EOF {
-			break
-		}
-		hashes = append(hashes, hex.EncodeToString(buff))
-	}
-	return hashes
-}
-
 func main() {
 	command := os.Args[1]
 
@@ -256,23 +225,20 @@ func main() {
 		}
 		decoded, _, err := decodeOne(string(byteContent))
 		m := decoded.(map[string]interface{})
-		jsonOutput, _ := json.Marshal(decoded)
-		var torrent Torrent
-		json.Unmarshal(jsonOutput, &torrent)
-		fmt.Println("Tracker URL:", torrent.Announce)
-		fmt.Println("Length:", torrent.Info.Length)
-		encoded, err := encode(m["info"])
+		info := m["info"].(map[string]interface{})
+		fmt.Println("Tracker URL:", m["announce"])
+		fmt.Println("Length:", info["length"])
+		encoded, err := encode(info)
 		if err != nil {
 			fmt.Println(err)
 		} else {
 			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
 		}
-		fmt.Println("Piece Length:", torrent.Info.PieceLength)
-
+		fmt.Println("Piece Length:", info["piece length"])
 		fmt.Println("Piece Hashes:")
-		pieceHashes := decodePieceHashes(torrent.Info.Pieces)
-		for _, pieceHash := range pieceHashes {
-			fmt.Println(pieceHash)
+		pieces := info["pieces"].(string)
+		for i := 0; i < len(pieces); i += 20 {
+			fmt.Printf("%x\n", pieces[i:i+20])
 		}
 	} else {
 		fmt.Println("Unknown command: " + command)
