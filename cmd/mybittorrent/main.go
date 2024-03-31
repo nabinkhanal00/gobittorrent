@@ -267,6 +267,7 @@ func main() {
 		} else {
 			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
 		}
+		fmt.Println("Piece Length:", torrent.Info.PieceLength)
 
 		fmt.Println("Piece Hashes:")
 		pieceHashes := decodePieceHashes(torrent.Info.Pieces)
