@@ -2,10 +2,12 @@ package main
 
 import (
 	// Uncomment this line to pass the first stage
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"unicode"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
@@ -26,6 +28,81 @@ type Info struct {
 	Name        string `json:"name"`
 	PieceLength int    `json:"piece length"`
 	Pieces      string `json:"pieces"`
+}
+
+func encodeInt(input int) (string, error) {
+	value := strconv.Itoa(input)
+	return "i" + value + "e", nil
+}
+func encodeString(input string) (string, error) {
+	return fmt.Sprintf("%d:%v", len(input), input), nil
+}
+func encodeList(input []interface{}) (string, error) {
+	result := "l"
+	for _, value := range input {
+		v, err := encode(value)
+		if err != nil {
+			return "", err
+		}
+		result += v
+	}
+	result += "e"
+	return result, nil
+}
+func encodeDictionary(input map[string]interface{}) (string, error) {
+	keys := []string{}
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := "d"
+	for _, key := range keys {
+		encodedKey, err := encode(key)
+		if err != nil {
+			return "", nil
+		}
+		result += encodedKey
+		value := input[key]
+		encodedValue, err := encode(value)
+		if err != nil {
+			return "", nil
+		}
+		result += encodedValue
+	}
+	result += "e"
+	return result, nil
+}
+func encode(input interface{}) (string, error) {
+	var result string
+	switch v := input.(type) {
+	case int:
+		encodedValue, err := encodeInt(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case string:
+		encodedValue, err := encodeString(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case []interface{}:
+		encodedValue, err := encodeList(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case map[string]interface{}:
+		encodedValue, err := encodeDictionary(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	default:
+		return "", errors.New("Unknown type.")
+	}
+	return result, nil
 }
 
 func parseInt(input string) (int, int, error) {
@@ -160,11 +237,18 @@ func main() {
 			return
 		}
 		decoded, _, err := parseOne(string(byteContent))
+		m := decoded.(map[string]interface{})
 		jsonOutput, _ := json.Marshal(decoded)
 		var torrent Torrent
 		json.Unmarshal(jsonOutput, &torrent)
 		fmt.Println("Tracker URL:", torrent.Announce)
 		fmt.Println("Length:", torrent.Info.Length)
+		encoded, err := encode(m["info"])
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
+		}
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
