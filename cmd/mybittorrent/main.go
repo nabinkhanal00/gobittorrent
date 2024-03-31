@@ -2,10 +2,12 @@ package main
 
 import (
 	// Uncomment this line to pass the first stage
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"unicode"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
@@ -14,6 +16,94 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
+
+type Torrent struct {
+	Announce  string `json:"announce"`
+	CreatedBy string `json:"created by"`
+	Info      Info   `json:"info"`
+}
+
+type Info struct {
+	Length      int    `json:"length"`
+	Name        string `json:"name"`
+	PieceLength int    `json:"piece length"`
+	Pieces      string `json:"pieces"`
+}
+
+func encodeInt(input int) (string, error) {
+	value := strconv.Itoa(input)
+	return "i" + value + "e", nil
+}
+func encodeString(input string) (string, error) {
+	return fmt.Sprintf("%d:%v", len(input), input), nil
+}
+func encodeList(input []interface{}) (string, error) {
+	result := "l"
+	for _, value := range input {
+		v, err := encode(value)
+		if err != nil {
+			return "", err
+		}
+		result += v
+	}
+	result += "e"
+	return result, nil
+}
+func encodeDictionary(input map[string]interface{}) (string, error) {
+	keys := []string{}
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := "d"
+	for _, key := range keys {
+		encodedKey, err := encode(key)
+		if err != nil {
+			return "", nil
+		}
+		result += encodedKey
+		value := input[key]
+		encodedValue, err := encode(value)
+		if err != nil {
+			return "", nil
+		}
+		result += encodedValue
+	}
+	result += "e"
+	return result, nil
+}
+func encode(input interface{}) (string, error) {
+	var result string
+	switch v := input.(type) {
+	case int:
+		encodedValue, err := encodeInt(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case string:
+		encodedValue, err := encodeString(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case []interface{}:
+		encodedValue, err := encodeList(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	case map[string]interface{}:
+		encodedValue, err := encodeDictionary(v)
+		if err != nil {
+			return "", err
+		}
+		result = encodedValue
+	default:
+		return "", errors.New("Unknown type.")
+	}
+	return result, nil
+}
 
 func parseInt(input string) (int, int, error) {
 
@@ -60,53 +150,19 @@ func parseString(input string) (string, int, error) {
 }
 
 func parseList(bencodedString string) (interface{}, int, error) {
-	currentIndex := 0
-	result := []interface{}{}
-	s := []interface{}{}
-	var oldTop *[]interface{} = nil
-	var current *[]interface{} = nil
-	for currentIndex < len(bencodedString) {
-		if bencodedString[currentIndex] == 'l' {
-			newList := []interface{}{}
-			s = append(s, &newList)
-			if current != nil {
-				oldTop = current
-			}
-			current = &newList
-			currentIndex++
-		} else if bencodedString[currentIndex] == 'e' {
-			if oldTop != nil {
-				*oldTop = append(*oldTop, *current)
-				current = oldTop
-				s = s[:len(s)-1]
-				if len(s) == 1 {
-					oldTop = nil
-				} else {
-					oldTop = s[len(s)-2].(*[]interface{})
-				}
-			} else {
-				return *current, currentIndex + 1, nil
-			}
-
-			currentIndex++
-		} else if bencodedString[currentIndex] == 'i' {
-			intValue, index, err := parseInt(bencodedString[currentIndex:])
-			if err != nil {
-				return nil, -1, err
-			}
-			currentIndex = currentIndex + index
-			*current = append(*current, intValue)
-		} else if unicode.IsDigit(rune(bencodedString[currentIndex])) {
-			strValue, index, err := parseString(bencodedString[currentIndex:])
-			if err != nil {
-				return nil, -1, err
-			}
-			currentIndex = currentIndex + index
-			*current = append(*current, strValue)
+	currentIndex := 1
+	list := []interface{}{}
+	for bencodedString[currentIndex] != 'e' {
+		value, index, err := parseOne(bencodedString[currentIndex:])
+		if err != nil {
+			return nil, -1, err
 		}
+		list = append(list, value)
+		currentIndex = index + currentIndex
 	}
-	return result, currentIndex + 1, nil
+	return list, currentIndex + 1, nil
 }
+
 func parseDictionary(bencodedString string) (interface{}, int, error) {
 	currentIndex := 1
 	dict := map[string]interface{}{}
@@ -125,6 +181,7 @@ func parseDictionary(bencodedString string) (interface{}, int, error) {
 	}
 	return dict, currentIndex + 1, nil
 }
+
 func parseOne(bencodedString string) (interface{}, int, error) {
 
 	letter := bencodedString[0]
@@ -155,37 +212,6 @@ func parseOne(bencodedString string) (interface{}, int, error) {
 	}
 	return nil, -1, nil
 }
-func decodeBencode(bencodedString string) (interface{}, error) {
-	letter := bencodedString[0]
-	if letter == 'l' {
-		if result, _, err := parseList(bencodedString); err != nil {
-			return nil, err
-		} else {
-			return result, nil
-		}
-	} else if letter == 'd' {
-
-		if result, _, err := parseDictionary(bencodedString); err != nil {
-			return nil, err
-		} else {
-			return result, nil
-		}
-	} else if letter == 'i' {
-		if result, _, err := parseInt(bencodedString); err != nil {
-			return nil, err
-		} else {
-			return result, nil
-		}
-	} else if unicode.IsDigit(rune(letter)) {
-
-		if result, _, err := parseString(bencodedString); err != nil {
-			return nil, err
-		} else {
-			return result, nil
-		}
-	}
-	return nil, nil
-}
 
 func main() {
 	command := os.Args[1]
@@ -195,7 +221,7 @@ func main() {
 
 		bencodedValue := os.Args[2]
 
-		decoded, err := decodeBencode(bencodedValue)
+		decoded, _, err := parseOne(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -203,6 +229,26 @@ func main() {
 
 		jsonOutput, _ := json.Marshal(decoded)
 		fmt.Println(string(jsonOutput))
+	} else if command == "info" {
+		fileName := os.Args[2]
+		byteContent, err := os.ReadFile(fileName)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		decoded, _, err := parseOne(string(byteContent))
+		m := decoded.(map[string]interface{})
+		jsonOutput, _ := json.Marshal(decoded)
+		var torrent Torrent
+		json.Unmarshal(jsonOutput, &torrent)
+		fmt.Println("Tracker URL:", torrent.Announce)
+		fmt.Println("Length:", torrent.Info.Length)
+		encoded, err := encode(m["info"])
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
+		}
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
