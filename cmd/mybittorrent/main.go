@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -16,6 +19,19 @@ import (
 // Example:
 // - 5:hello -> hello
 // - 10:hello12345 -> hello12345
+
+func createURL(urlstring string, params map[string]string) string {
+	if urlstring[len(urlstring)-1] != '/' {
+		urlstring += "/"
+	}
+	urlstring += "?"
+	for key, value := range params {
+		urlstring += url.QueryEscape(key) + "=" + url.QueryEscape(value) + "&"
+
+	}
+	return urlstring
+
+}
 
 func encodeInt(input int) (string, error) {
 	value := strconv.Itoa(input)
@@ -240,6 +256,54 @@ func main() {
 		for i := 0; i < len(pieces); i += 20 {
 			fmt.Printf("%x\n", pieces[i:i+20])
 		}
+	} else if command == "peers" {
+		fileName := os.Args[2]
+		byteContent, err := os.ReadFile(fileName)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		decoded, _, err := decodeOne(string(byteContent))
+		m := decoded.(map[string]interface{})
+		info := m["info"].(map[string]interface{})
+		encoded, err := encode(info)
+		info_hash := sha1.Sum([]byte(encoded))
+		queryParams := map[string]string{
+			"info_hash":  string(info_hash[:]),
+			"peer_id":    "00112233445566778899",
+			"port":       "6881",
+			"uploaded":   "0",
+			"downloaded": "0",
+			"left":       fmt.Sprint(info["piece length"].(int)),
+			"compact":    "1",
+		}
+
+		resp, err := http.Get(createURL(m["announce"].(string), queryParams))
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		response, _, err := decodeOne(string(body))
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		peers := response.(map[string]interface{})["peers"].(string)
+		for i := 0; i < len(peers); i += 6 {
+			result := ""
+			result += fmt.Sprint(int(peers[i])) + "."
+			result += fmt.Sprint(int(peers[i+1])) + "."
+			result += fmt.Sprint(int(peers[i+2])) + "."
+			result += fmt.Sprint(int(peers[i+3])) + ":"
+			result += fmt.Sprint(int(peers[i+4])<<8 | int(peers[i+5]))
+			fmt.Println(result)
+		}
+
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
