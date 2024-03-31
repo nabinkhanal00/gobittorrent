@@ -252,7 +252,11 @@ func main() {
 		fmt.Println("Piece Hashes:")
 		pieces := []byte(torrent.Info.Pieces)
 		for i := 0; i < len(pieces); i += 20 {
-			fmt.Println(fmt.Sprintf("%x", pieces[i:i+20]))
+			if i+20 > len(pieces) {
+				fmt.Println(fmt.Sprintf("%x", pieces[i:len(pieces)]))
+			} else {
+				fmt.Println(fmt.Sprintf("%x", pieces[i:i+20]))
+			}
 		}
 		// fmt.Printf("%x\n", torrent.Info.Pieces)
 
