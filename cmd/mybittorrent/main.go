@@ -105,7 +105,7 @@ func encode(input interface{}) (string, error) {
 	return result, nil
 }
 
-func parseInt(input string) (int, int, error) {
+func decodeInt(input string) (int, int, error) {
 
 	value := ""
 	if len(input) == 0 {
@@ -125,7 +125,7 @@ func parseInt(input string) (int, int, error) {
 	}
 	return number, current + 1, nil
 }
-func parseString(input string) (string, int, error) {
+func decodeString(input string) (string, int, error) {
 
 	var firstColonIndex int
 
@@ -149,11 +149,11 @@ func parseString(input string) (string, int, error) {
 	return input[firstColonIndex+1 : firstColonIndex+1+length], firstColonIndex + 1 + length, nil
 }
 
-func parseList(bencodedString string) (interface{}, int, error) {
+func decodeList(bencodedString string) ([]interface{}, int, error) {
 	currentIndex := 1
 	list := []interface{}{}
 	for bencodedString[currentIndex] != 'e' {
-		value, index, err := parseOne(bencodedString[currentIndex:])
+		value, index, err := decodeOne(bencodedString[currentIndex:])
 		if err != nil {
 			return nil, -1, err
 		}
@@ -163,16 +163,16 @@ func parseList(bencodedString string) (interface{}, int, error) {
 	return list, currentIndex + 1, nil
 }
 
-func parseDictionary(bencodedString string) (interface{}, int, error) {
+func decodeDictionary(bencodedString string) (map[string]interface{}, int, error) {
 	currentIndex := 1
 	dict := map[string]interface{}{}
 	for bencodedString[currentIndex] != 'e' {
-		key, index, err := parseOne(bencodedString[currentIndex:])
+		key, index, err := decodeOne(bencodedString[currentIndex:])
 		if err != nil {
 			return nil, -1, err
 		}
 		currentIndex = index + currentIndex
-		value, index, err := parseOne(bencodedString[currentIndex:])
+		value, index, err := decodeOne(bencodedString[currentIndex:])
 		if err != nil {
 			return nil, -1, err
 		}
@@ -182,29 +182,29 @@ func parseDictionary(bencodedString string) (interface{}, int, error) {
 	return dict, currentIndex + 1, nil
 }
 
-func parseOne(bencodedString string) (interface{}, int, error) {
+func decodeOne(bencodedString string) (interface{}, int, error) {
 
 	letter := bencodedString[0]
 	if letter == 'l' {
-		if result, nextPos, err := parseList(bencodedString); err != nil {
+		if result, nextPos, err := decodeList(bencodedString); err != nil {
 			return nil, nextPos, err
 		} else {
 			return result, nextPos, nil
 		}
 	} else if letter == 'd' {
-		if result, nextPos, err := parseDictionary(bencodedString); err != nil {
+		if result, nextPos, err := decodeDictionary(bencodedString); err != nil {
 			return nil, nextPos, err
 		} else {
 			return result, nextPos, nil
 		}
 	} else if letter == 'i' {
-		if result, nextPos, err := parseInt(bencodedString); err != nil {
+		if result, nextPos, err := decodeInt(bencodedString); err != nil {
 			return nil, nextPos, err
 		} else {
 			return result, nextPos, nil
 		}
 	} else if unicode.IsDigit(rune(letter)) {
-		if result, nextPos, err := parseString(bencodedString); err != nil {
+		if result, nextPos, err := decodeString(bencodedString); err != nil {
 			return nil, nextPos, err
 		} else {
 			return result, nextPos, nil
@@ -221,7 +221,7 @@ func main() {
 
 		bencodedValue := os.Args[2]
 
-		decoded, _, err := parseOne(bencodedValue)
+		decoded, _, err := decodeOne(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -236,7 +236,7 @@ func main() {
 			fmt.Println(err)
 			return
 		}
-		decoded, _, err := parseOne(string(byteContent))
+		decoded, _, err := decodeOne(string(byteContent))
 		m := decoded.(map[string]interface{})
 		jsonOutput, _ := json.Marshal(decoded)
 		var torrent Torrent
@@ -249,6 +249,13 @@ func main() {
 		} else {
 			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
 		}
+		fmt.Println("Piece Hashes:")
+		pieces := []byte(torrent.Info.Pieces)
+		for i := 0; i < len(pieces); i += 20 {
+			fmt.Println(fmt.Sprintf("%x", pieces[i:i+20]))
+		}
+		// fmt.Printf("%x\n", torrent.Info.Pieces)
+
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
