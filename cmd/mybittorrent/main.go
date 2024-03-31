@@ -3,12 +3,15 @@ package main
 import (
 	// Uncomment this line to pass the first stage
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"unicode"
 	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
 )
@@ -213,6 +216,21 @@ func decodeOne(bencodedString string) (interface{}, int, error) {
 	return nil, -1, nil
 }
 
+func decodePieceHashes(str string) []string {
+
+	hashes := make([]string, 0)
+	reader := strings.NewReader(str)
+	buff := make([]byte, 20)
+	for {
+		_, err := reader.Read(buff)
+		if err == io.EOF {
+			break
+		}
+		hashes = append(hashes, hex.EncodeToString(buff))
+	}
+	return hashes
+}
+
 func main() {
 	command := os.Args[1]
 
@@ -249,18 +267,12 @@ func main() {
 		} else {
 			fmt.Println("Info Hash:", fmt.Sprintf("%x", sha1.Sum([]byte(encoded))))
 		}
-		fmt.Println("Piece Length:", torrent.Info.PieceLength)
-		fmt.Println("Piece Hashes:")
-		pieces := []byte(torrent.Info.Pieces)
-		for i := 0; i < len(pieces); i += 20 {
-			if i+20 > len(pieces) {
-				fmt.Println(fmt.Sprintf("%x", pieces[i:]))
-			} else {
-				fmt.Println(fmt.Sprintf("%x", pieces[i:i+20]))
-			}
-		}
-		// fmt.Printf("%x\n", torrent.Info.Pieces)
 
+		fmt.Println("Piece Hashes:")
+		pieceHashes := decodePieceHashes(torrent.Info.Pieces)
+		for _, pieceHash := range pieceHashes {
+			fmt.Println(pieceHash)
+		}
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)
