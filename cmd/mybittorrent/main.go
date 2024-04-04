@@ -3,10 +3,12 @@ package main
 import (
 	// Uncomment this line to pass the first stage
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,6 +33,18 @@ func createURL(urlstring string, params map[string]string) string {
 	}
 	return urlstring
 
+}
+func torrentDecode(fileName string) (map[string]interface{}, error) {
+	byteContent, err := os.ReadFile(fileName)
+	if err != nil {
+		return nil, err
+	}
+	decoded, _, err := decodeOne(string(byteContent))
+	m, ok := decoded.(map[string]interface{})
+	if !ok {
+		return nil, errors.New("Couldnot convert bendoded data to map")
+	}
+	return m, nil
 }
 
 func encodeInt(input int) (string, error) {
@@ -293,16 +307,59 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		peers := response.(map[string]interface{})["peers"].(string)
-		for i := 0; i < len(peers); i += 6 {
+		peersString := response.(map[string]interface{})["peers"].(string)
+		peers := []string{}
+		for i := 0; i < len(peersString); i += 6 {
 			result := ""
-			result += fmt.Sprint(int(peers[i])) + "."
-			result += fmt.Sprint(int(peers[i+1])) + "."
-			result += fmt.Sprint(int(peers[i+2])) + "."
-			result += fmt.Sprint(int(peers[i+3])) + ":"
-			result += fmt.Sprint(int(peers[i+4])<<8 | int(peers[i+5]))
-			fmt.Println(result)
+			result += fmt.Sprint(int(peersString[i])) + "."
+			result += fmt.Sprint(int(peersString[i+1])) + "."
+			result += fmt.Sprint(int(peersString[i+2])) + "."
+			result += fmt.Sprint(int(peersString[i+3])) + ":"
+			result += fmt.Sprint(int(peersString[i+4])<<8 | int(peersString[i+5]))
+			peers = append(peers, result)
 		}
+		for _, peer := range peers {
+			fmt.Println(peer)
+		}
+
+	} else if command == "handshake" {
+		fileName := os.Args[2]
+		torrentData, err := torrentDecode(fileName)
+		info := torrentData["info"].(map[string]interface{})
+		encoded, err := encode(info)
+		info_hash := sha1.Sum([]byte(encoded))
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		address := os.Args[3]
+		var message []byte
+		message = append(message, 19)
+		message = append(message, []byte("BitTorrent protocol")...)
+		message = append(message, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
+		message = append(message, info_hash[:]...)
+		message = append(message, []byte{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9}...)
+
+		conn, err := net.Dial("tcp", address)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		_, err = conn.Write(message)
+		if err != nil {
+
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		_, err = conn.Read(message)
+
+		if err != nil {
+
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		hexString := hex.EncodeToString(message[20:40])
+		fmt.Println("Peer ID:", hexString)
 
 	} else {
 		fmt.Println("Unknown command: " + command)
