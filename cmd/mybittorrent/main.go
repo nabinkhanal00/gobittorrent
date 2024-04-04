@@ -338,7 +338,7 @@ func main() {
 		message = append(message, []byte("BitTorrent protocol")...)
 		message = append(message, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
 		message = append(message, info_hash[:]...)
-		message = append(message, []byte{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9}...)
+		message = append(message, []byte("00112233445566778899")...)
 
 		conn, err := net.Dial("tcp", address)
 		if err != nil {
@@ -358,7 +358,7 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		hexString := hex.EncodeToString(message[20:40])
+		hexString := hex.EncodeToString(message[48:68])
 		fmt.Println("Peer ID:", hexString)
 
 	} else {
