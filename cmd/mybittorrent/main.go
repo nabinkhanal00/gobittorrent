@@ -293,31 +293,38 @@ func downloadPiece(outFile, torrentFile, piece string) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	// fmt.Println("Received Unchoke Message:", buffer[:n])
 
 	// ask for pieces
 	pieceLength := info["piece length"].(int)
-	// fmt.Println("Total Piece Length: ", pieceLength)
 	maxBlockSize := 16 * 1024
 	result := []byte{}
+	noOfPieces := int(math.Ceil(float64(info["length"].(int)) / float64(pieceLength)))
+	if pieceNumber == noOfPieces-1 {
+		pieceLength = info["length"].(int) - (noOfPieces-1)*pieceLength
+	}
 	noOfBlocks := int(math.Ceil(float64(pieceLength) / float64(maxBlockSize)))
+	// fmt.Println("pieceLength:", pieceLength)
+	// fmt.Println("noOfBlocks:", noOfBlocks)
 	for i := 0; i < noOfBlocks; i++ {
+		// fmt.Println("i:", i)
 		downloaded := 0
 		blockSize := maxBlockSize
 		if i == (noOfBlocks - 1) {
 			blockSize = (pieceLength - (noOfBlocks-1)*maxBlockSize)
 		}
+		// fmt.Println("blockSize:", blockSize)
 
 		data := []byte{0, 0, 0, 9, 6}
 		index := intToBytes(int32(pieceNumber))
+		begin := intToBytes(int32(maxBlockSize * i))
 		length := intToBytes(int32(blockSize))
-		begin := intToBytes(int32(blockSize * i))
 		// fmt.Println("index", index, "length", length, "begin", begin)
 		data = append(data, index...)
 		data = append(data, begin...)
 		data = append(data, length...)
 		_, err = conn.Write(data)
 		if err != nil {
+			fmt.Println("Error Here during write")
 			fmt.Println(err)
 			os.Exit(1)
 		}
@@ -331,6 +338,7 @@ func downloadPiece(outFile, torrentFile, piece string) {
 		// fmt.Println("Current Download Piece:", data[:13], (n - 13))
 		downloaded += (n - 13)
 		result = append(result, data[13:n]...)
+		// fmt.Println("downloaded:", downloaded)
 		for downloaded < blockSize {
 
 			data = make([]byte, int(math.Pow(2, 15)))
@@ -343,6 +351,7 @@ func downloadPiece(outFile, torrentFile, piece string) {
 			// then the message id : request 6
 			result = append(result, data[:n]...)
 			downloaded += n
+			// fmt.Println("downloaded:", downloaded)
 		}
 	}
 	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY, 0644)
