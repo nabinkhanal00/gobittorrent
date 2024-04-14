@@ -482,18 +482,20 @@ func downloadFile(outFile, torrentFile string) {
 
 	// ask for pieces
 	pieceLength := info["piece length"].(int)
+	fileLength := info["length"].(int)
 	maxBlockSize := 16 * 1024
-	result := []byte{}
 	noOfPieces := int(math.Ceil(float64(info["length"].(int)) / float64(pieceLength)))
 
-	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(outFile, os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	calculatedFileSize := 0
 	for pieceNumber := 0; pieceNumber < noOfPieces; pieceNumber++ {
+		result := []byte{}
 		if pieceNumber == noOfPieces-1 {
-			pieceLength = info["length"].(int) - (noOfPieces-1)*pieceLength
+			pieceLength = fileLength - (noOfPieces-1)*pieceLength
 		}
 		noOfBlocks := int(math.Ceil(float64(pieceLength) / float64(maxBlockSize)))
 		// fmt.Println("pieceLength:", pieceLength)
@@ -522,27 +524,29 @@ func downloadFile(outFile, torrentFile string) {
 				os.Exit(1)
 			}
 
-			data = make([]byte, int(math.Pow(2, 15)))
-			n, err = conn.Read(data)
+			readData := make([]byte, int(math.Pow(2, 15)))
+			n, err = conn.Read(readData)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 			// fmt.Println("Current Download Piece:", data[:13], (n - 13))
 			downloaded += (n - 13)
-			result = append(result, data[13:n]...)
+			calculatedFileSize += (n - 13)
+			result = append(result, readData[13:n]...)
 			// fmt.Println("downloaded:", downloaded)
 			for downloaded < blockSize {
 
-				data = make([]byte, int(math.Pow(2, 15)))
-				n, err = conn.Read(data)
+				readData = make([]byte, int(math.Pow(2, 15)))
+				n, err = conn.Read(readData)
 				if err != nil {
 					fmt.Println(err)
 					os.Exit(1)
 				}
 				// first four bytes : prefix length
 				// then the message id : request 6
-				result = append(result, data[:n]...)
+				result = append(result, readData[:n]...)
+				calculatedFileSize += n
 				downloaded += n
 				// fmt.Println("downloaded:", downloaded)
 			}
